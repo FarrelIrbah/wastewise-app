@@ -1,35 +1,34 @@
 "use client"
 
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js"
-import { Chart } from "react-chartjs-2"
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend)
+  Line,
+  LineChart,
+  Bar,
+  BarChart,
+  Pie,
+  PieChart,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 
 const CHART_COLORS = [
-  "rgba(59, 130, 246, 0.9)",   // Blue
-  "rgba(34, 197, 94, 0.9)",    // Green
-  "rgba(249, 115, 22, 0.9)",    // Orange
-  "rgba(168, 85, 247, 0.9)",   // Purple
-  "rgba(239, 68, 68, 0.9)",    // Red
-  "rgba(236, 72, 153, 0.9)",    // Pink
-  "rgba(14, 165, 233, 0.9)",   // Sky Blue
-  "rgba(245, 158, 11, 0.9)",   // Amber
-  "rgba(132, 204, 22, 0.9)",   // Lime
-  "rgba(20, 184, 166, 0.9)",   // Teal
-  "rgba(124, 58, 237, 0.9)",   // Violet
-  "rgba(217, 70, 239, 0.9)",   // Fuchsia
-];
+  "hsl(217, 91%, 60%)", // Blue
+  "hsl(142, 76%, 36%)", // Green
+  "hsl(24, 95%, 53%)", // Orange
+  "hsl(262, 83%, 58%)", // Purple
+  "hsl(0, 84%, 60%)", // Red
+  "hsl(322, 65%, 68%)", // Pink
+  "hsl(199, 89%, 48%)", // Sky Blue
+  "hsl(43, 96%, 56%)", // Amber
+  "hsl(84, 81%, 44%)", // Lime
+  "hsl(178, 77%, 40%)", // Teal
+  "hsl(258, 90%, 66%)", // Violet
+  "hsl(292, 84%, 61%)", // Fuchsia
+]
 
 interface AnalyticsChartProps {
   data: any[]
@@ -37,115 +36,232 @@ interface AnalyticsChartProps {
 }
 
 export function AnalyticsChart({ data, type }: AnalyticsChartProps) {
-  // ✨ PERBAIKAN: Kembali menggunakan `item_detail`
+  // Determine chart data structure
   const isSalesByDetail = type === "bar" && data[0]?.item_detail
   const isRtComparison = type === "bar" && data[0]?.rt
   const isSalesByType = type === "bar" && !isSalesByDetail && !isRtComparison
 
-  const generateChartData = () => {
-    switch (type) {
-      case "line":
-        return {
-          labels: data.map((item) => item.month),
-          datasets: [
-            { label: "Sampah Organik (kg)", data: data.map((item) => item.organic), borderColor: CHART_COLORS[1], backgroundColor: "rgba(34, 197, 94, 0.1)", tension: 0.4, yAxisID: "y" },
-            { label: "Sampah Anorganik (kg)", data: data.map((item) => item.inorganic), borderColor: CHART_COLORS[0], backgroundColor: "rgba(59, 130, 246, 0.1)", tension: 0.4, yAxisID: "y" },
-            { label: "Penjualan (kg)", data: data.map((item) => item.sales), borderColor: CHART_COLORS[2], backgroundColor: "rgba(249, 115, 22, 0.1)", tension: 0.4, yAxisID: "y" },
-          ],
-        }
+  // Chart configurations
+  const lineChartConfig = {
+    organic: {
+      label: "Sampah Organik (kg)",
+      color: CHART_COLORS[1],
+    },
+    inorganic: {
+      label: "Sampah Anorganik (kg)",
+      color: CHART_COLORS[0],
+    },
+    sales: {
+      label: "Penjualan (kg)",
+      color: CHART_COLORS[2],
+    },
+  }
 
-      case "bar":
-        if (isRtComparison) {
-          return {
-            labels: data.map((item) => item.rt),
-            datasets: [
-              { label: "Sampah Organik (kg)", data: data.map((item) => item.organic), backgroundColor: CHART_COLORS[1] },
-              { label: "Sampah Anorganik (kg)", data: data.map((item) => item.inorganic), backgroundColor: CHART_COLORS[0] },
-              { label: "Penjualan (kg)", data: data.map((item) => item.sales), backgroundColor: CHART_COLORS[2] },
-            ],
-          }
-        }
+  const barChartConfig = {
+    organic: {
+      label: "Sampah Organik (kg)",
+      color: CHART_COLORS[1],
+    },
+    inorganic: {
+      label: "Sampah Anorganik (kg)",
+      color: CHART_COLORS[0],
+    },
+    sales: {
+      label: "Penjualan (kg)",
+      color: CHART_COLORS[2],
+    },
+    total_revenue: {
+      label: "Pendapatan (Rp)",
+      color: CHART_COLORS[0],
+    },
+    total_weight: {
+      label: "Berat (kg)",
+      color: CHART_COLORS[2],
+    },
+    revenue: {
+      label: "Pendapatan (Rp)",
+      color: CHART_COLORS[1],
+    },
+  }
 
-        if (isSalesByDetail) {
-          return {
-            // ✨ PERBAIKAN: Kembali menggunakan `item_detail`
-            labels: data.map((item) => item.item_detail),
-            datasets: [
-              { label: "Pendapatan (Rp)", data: data.map((item) => item.total_revenue), backgroundColor: CHART_COLORS[0], yAxisID: "y" },
-              { label: "Berat (kg)", data: data.map((item) => item.total_weight), backgroundColor: CHART_COLORS[2], yAxisID: "y1" },
-            ],
-          }
-        }
+  const pieChartConfig = data.reduce((config: any, item: any, index: number) => {
+    config[item.type] = {
+      label: item.type,
+      color: CHART_COLORS[index % CHART_COLORS.length],
+    }
+    return config
+  }, {})
 
-        if (isSalesByType) {
-          return {
-            labels: data.map((item) => item.type),
-            datasets: [{ label: "Pendapatan (Rp)", data: data.map((item) => item.revenue), backgroundColor: CHART_COLORS[1] }],
-          }
-        }
-        break
+  // Custom tooltip formatters
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(value)
+  }
 
-      case "doughnut":
-        return {
-          labels: data.map((item) => item.type),
-          datasets: [
-            {
-              label: "Berat (kg)",
-              data: data.map((item) => item.weight),
-              backgroundColor: CHART_COLORS.slice(0, data.length),
-              borderWidth: 2,
-              borderColor: "#fff",
-            },
-          ],
-        }
+  const formatWeight = (value: number) => {
+    return `${Number(value).toFixed(1)} kg`
+  }
 
-      default:
-        return { labels: [], datasets: [] }
+  // Render line chart
+  if (type === "line") {
+    return (
+      <ChartContainer config={lineChartConfig} className="min-h-[400px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+            <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+            <ChartTooltip
+              content={<ChartTooltipContent formatter={(value, name) => [formatWeight(Number(value)), name]} />}
+            />
+            <Line
+              type="monotone"
+              dataKey="organic"
+              stroke="var(--color-organic)"
+              strokeWidth={2}
+              dot={{ fill: "var(--color-organic)", strokeWidth: 2, r: 4 }}
+              name="Sampah Organik (kg)"
+            />
+            <Line
+              type="monotone"
+              dataKey="inorganic"
+              stroke="var(--color-inorganic)"
+              strokeWidth={2}
+              dot={{ fill: "var(--color-inorganic)", strokeWidth: 2, r: 4 }}
+              name="Sampah Anorganik (kg)"
+            />
+            <Line
+              type="monotone"
+              dataKey="sales"
+              stroke="var(--color-sales)"
+              strokeWidth={2}
+              dot={{ fill: "var(--color-sales)", strokeWidth: 2, r: 4 }}
+              name="Penjualan (kg)"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartContainer>
+    )
+  }
+
+  // Render bar chart
+  if (type === "bar") {
+    if (isRtComparison) {
+      return (
+        <ChartContainer config={barChartConfig} className="min-h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="rt" tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+              <ChartTooltip
+                content={<ChartTooltipContent formatter={(value, name) => [formatWeight(Number(value)), name]} />}
+              />
+              <Bar dataKey="organic" fill="var(--color-organic)" radius={[2, 2, 0, 0]} name="Sampah Organik (kg)" />
+              <Bar
+                dataKey="inorganic"
+                fill="var(--color-inorganic)"
+                radius={[2, 2, 0, 0]}
+                name="Sampah Anorganik (kg)"
+              />
+              <Bar dataKey="sales" fill="var(--color-sales)" radius={[2, 2, 0, 0]} name="Penjualan (kg)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+      )
+    }
+
+    if (isSalesByDetail) {
+      return (
+        <ChartContainer config={barChartConfig} className="min-h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="item_detail" tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis yAxisId="left" orientation="left" tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} tickMargin={8} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value, name) => {
+                      if (name === "Pendapatan (Rp)") {
+                        return [formatCurrency(Number(value)), name]
+                      }
+                      return [formatWeight(Number(value)), name]
+                    }}
+                  />
+                }
+              />
+              <Bar
+                yAxisId="left"
+                dataKey="total_revenue"
+                fill="var(--color-total_revenue)"
+                radius={[2, 2, 0, 0]}
+                name="Pendapatan (Rp)"
+              />
+              <Bar
+                yAxisId="right"
+                dataKey="total_weight"
+                fill="var(--color-total_weight)"
+                radius={[2, 2, 0, 0]}
+                name="Berat (kg)"
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+      )
+    }
+
+    if (isSalesByType) {
+      return (
+        <ChartContainer config={barChartConfig} className="min-h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="type" tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+              <ChartTooltip
+                content={<ChartTooltipContent formatter={(value, name) => [formatCurrency(Number(value)), name]} />}
+              />
+              <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[2, 2, 0, 0]} name="Pendapatan (Rp)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+      )
     }
   }
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { position: "top" as const },
-      tooltip: {
-        callbacks: {
-          label: function (context: any) {
-            if (context.chart.config.type === "doughnut" || context.chart.config.type === "pie") {
-              const segmentLabel = context.label || ""
-              const value = context.raw || 0
-              return `${segmentLabel}: ${Number(value).toFixed(1)} kg`
-            }
-            let lineLabel = context.dataset.label || ""
-            if (lineLabel) {
-              lineLabel += ": "
-            }
-            const value = context.parsed.y
-            if (value !== null) {
-              if (context.dataset.label?.toLowerCase().includes("(kg)")) {
-                lineLabel += `${Number(value).toFixed(1)} kg`
-              } else {
-                lineLabel += new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(value)
-              }
-            }
-            return lineLabel
-          },
-        },
-      },
-    },
-    scales:
-      type === "doughnut"
-        ? undefined
-        : isSalesByDetail
-        ? {
-            y: { type: "linear" as const, display: true, position: "left" as const, beginAtZero: true, title: { display: true, text: "Pendapatan (Rp)" } },
-            y1: { type: "linear" as const, display: true, position: "right" as const, beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: "Berat (kg)" } },
-          }
-        : {
-            y: { beginAtZero: true, title: { display: true, text: "Jumlah" } },
-          },
+  // Render doughnut chart (as pie chart)
+  if (type === "doughnut") {
+    return (
+      <ChartContainer config={pieChartConfig} className="min-h-[400px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="weight"
+              nameKey="type"
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={120}
+              paddingAngle={2}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+              ))}
+            </Pie>
+            <ChartTooltip
+              content={<ChartTooltipContent formatter={(value, name) => [formatWeight(Number(value)), name]} />}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </ChartContainer>
+    )
   }
 
-  return <Chart type={type} data={generateChartData()!} options={options} />
+  return null
 }

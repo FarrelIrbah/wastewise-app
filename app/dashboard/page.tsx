@@ -59,7 +59,7 @@ export default function OrganicWastePage() {
       const { data: wasteData, error } = await supabase
         .from("waste_organic")
         .select("id, date, rt, nama, jumlah_kk, jumlah_timbunan_kg")
-        .order("date", { ascending: false }) // Ambil data terbaru dulu
+        .order("date", { ascending: false })
 
       if (error) throw error
       setData(wasteData || [])

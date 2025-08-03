@@ -14,7 +14,6 @@ import { createClient } from "@/lib/supabase/client"
 import { Plus, Search, Edit, Trash2, Loader2, ArrowUpDown, Weight, Users, Trash } from "lucide-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
-import { showDeleteConfirmation, showSuccessMessage, showErrorMessage, showLoadingMessage, closeLoadingMessage } from "@/lib/sweetalert"
 
 export const dynamic = "force-dynamic"
 
@@ -26,6 +25,9 @@ interface OrganicWaste {
   jumlah_kk: number
   jumlah_timbunan_kg: number
 }
+
+// Definisikan jumlah item per halaman
+const ITEMS_PER_PAGE = 10;
 
 export default function OrganicWastePage() {
   const [data, setData] = useState<OrganicWaste[]>([])
@@ -44,6 +46,9 @@ export default function OrganicWastePage() {
     key: keyof OrganicWaste
     direction: "ascending" | "descending"
   } | null>({ key: "date", direction: "descending" })
+  
+  // State untuk melacak halaman saat ini
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast()
   const supabase = createClient()
@@ -56,6 +61,7 @@ export default function OrganicWastePage() {
       const { data: wasteData, error } = await supabase
         .from("waste_organic")
         .select("id, date, rt, nama, jumlah_kk, jumlah_timbunan_kg")
+        .order("date", { ascending: false }) // Ambil data terbaru dulu
 
       if (error) throw error
       setData(wasteData || [])
@@ -71,6 +77,7 @@ export default function OrganicWastePage() {
   }, [])
 
   const filteredData = useMemo(() => {
+    setCurrentPage(1); // Reset ke halaman pertama setiap kali ada filter baru
     return data.filter(
       (item) =>
         item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -93,6 +100,15 @@ export default function OrganicWastePage() {
     }
     return sortableItems
   }, [filteredData, sortConfig])
+
+  // Logika untuk memotong data sesuai halaman yang aktif
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [currentPage, sortedData]);
+
+  // Hitung total halaman yang ada
+  const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
 
   const requestSort = (key: keyof OrganicWaste) => {
     let direction: "ascending" | "descending" = "ascending"
@@ -160,22 +176,15 @@ export default function OrganicWastePage() {
     setIsDialogOpen(true)
   }
 
-  const handleDelete = async (id: number, itemName: string) => {
-    const isConfirmed = await showDeleteConfirmation(`data sampah organik dari ${itemName}`)
-    
-    if (isConfirmed) {
-      showLoadingMessage('Menghapus data...')
-      try {
-        const { error } = await supabase.from("waste_organic").delete().eq("id", id)
-        if (error) throw error
-        
-        closeLoadingMessage()
-        showSuccessMessage('Berhasil!', 'Data sampah organik berhasil dihapus.')
-        fetchData()
-      } catch (error) {
-        closeLoadingMessage()
-        showErrorMessage('Error!', 'Gagal menghapus data sampah organik.')
-      }
+  const handleDelete = async (id: number) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data ini?")) return
+    try {
+      const { error } = await supabase.from("waste_organic").delete().eq("id", id)
+      if (error) throw error
+      toast({ title: "Berhasil", description: "Data berhasil dihapus." })
+      fetchData()
+    } catch (error) {
+      toast({ title: "Error", description: "Gagal menghapus data.", variant: "destructive" })
     }
   }
 
@@ -199,7 +208,7 @@ export default function OrganicWastePage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Timbunan</CardTitle>
@@ -233,7 +242,7 @@ export default function OrganicWastePage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-[425px] sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>{editingItem ? "Edit Data Sampah Organik" : "Tambah Data Sampah Organik"}</DialogTitle>
             <DialogDescription>Masukkan informasi sampah organik yang akan dicatat.</DialogDescription>
@@ -273,18 +282,18 @@ export default function OrganicWastePage() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg sm:text-xl">Data Sampah Organik</CardTitle>
-              <CardDescription className="text-sm">Daftar semua data sampah organik yang telah dicatat</CardDescription>
+              <CardTitle>Data Sampah Organik</CardTitle>
+              <CardDescription>Daftar semua data sampah organik yang telah dicatat</CardDescription>
             </div>
-            <div className="relative w-full sm:max-w-sm">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Cari berdasarkan nama atau RT..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="pl-9 max-w-sm"
               />
             </div>
           </div>
@@ -295,64 +304,62 @@ export default function OrganicWastePage() {
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
           ) : (
-            <div className="table-responsive">
-              <Table>
-              <TableHeader>
-                <TableRow>
-                  {/* ✨ PERUBAHAN: Menambahkan `className` untuk merapikan header tabel ✨ */}
-                  <TableHead className="w-[180px] text-center">
-                    <Button variant="ghost" onClick={() => requestSort("date")}>
-                      Tanggal <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <Button variant="ghost" onClick={() => requestSort("rt")}>
-                      RT <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead> {/* Dibiarkan rata kiri untuk nama */}
-                    <Button variant="ghost" onClick={() => requestSort("nama")}>
-                      Nama <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <Button variant="ghost" onClick={() => requestSort("jumlah_kk")}>
-                      Jumlah KK <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <Button variant="ghost" onClick={() => requestSort("jumlah_timbunan_kg")}>
-                      Timbunan (kg) <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-center">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedData.map((item) => (
-                  <TableRow key={item.id}>
-                    {/* ✨ PERUBAHAN: Menambahkan `className` untuk merapikan isi tabel ✨ */}
-                    <TableCell className="text-center font-medium">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
-                    <TableCell className="text-center">{item.rt}</TableCell>
-                    <TableCell>{item.nama}</TableCell> {/* Dibiarkan rata kiri untuk nama */}
-                    <TableCell className="text-center">{item.jumlah_kk}</TableCell>
-                    <TableCell className="text-center">{item.jumlah_timbunan_kg.toFixed(1)} kg</TableCell>
-                    <TableCell>
-                      {/* Dibungkus div agar tombol bisa ditengahkan dengan flex */}
-                      <div className="flex items-center justify-center space-x-2">
-                        <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" onClick={() => handleDelete(item.id, item.nama)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </div>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px] text-center"><Button variant="ghost" onClick={() => requestSort("date")}>Tanggal <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("rt")}>RT <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead><Button variant="ghost" onClick={() => requestSort("nama")}>Nama <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("jumlah_kk")}>Jumlah KK <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("jumlah_timbunan_kg")}>Timbunan (kg) <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedData.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-center font-medium">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
+                        <TableCell className="text-center">{item.rt}</TableCell>
+                        <TableCell>{item.nama}</TableCell>
+                        <TableCell className="text-center">{item.jumlah_kk}</TableCell>
+                        <TableCell className="text-center">{item.jumlah_timbunan_kg.toFixed(1)} kg</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center space-x-2">
+                            <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex items-center justify-between pt-4">
+                <div className="text-sm text-muted-foreground">
+                  Halaman {currentPage} dari {totalPages}
+                </div>
+                <div className="space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1 || totalPages === 0}
+                  >
+                    Sebelumnya
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                  >
+                    Berikutnya
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

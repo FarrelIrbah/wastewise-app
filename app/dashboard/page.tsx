@@ -26,7 +26,6 @@ interface OrganicWaste {
   jumlah_timbunan_kg: number
 }
 
-// Definisikan jumlah item per halaman
 const ITEMS_PER_PAGE = 10;
 
 export default function OrganicWastePage() {
@@ -47,7 +46,6 @@ export default function OrganicWastePage() {
     direction: "ascending" | "descending"
   } | null>({ key: "date", direction: "descending" })
   
-  // State untuk melacak halaman saat ini
   const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast()
@@ -61,6 +59,7 @@ export default function OrganicWastePage() {
       const { data: wasteData, error } = await supabase
         .from("waste_organic")
         .select("id, date, rt, nama, jumlah_kk, jumlah_timbunan_kg")
+        .order("date", { ascending: false }) // Ambil data terbaru dulu
 
       if (error) throw error
       setData(wasteData || [])
@@ -76,7 +75,7 @@ export default function OrganicWastePage() {
   }, [])
 
   const filteredData = useMemo(() => {
-    setCurrentPage(1); // Reset ke halaman pertama setiap kali ada filter baru
+    setCurrentPage(1);
     return data.filter(
       (item) =>
         item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -100,13 +99,11 @@ export default function OrganicWastePage() {
     return sortableItems
   }, [filteredData, sortConfig])
 
-  // Logika untuk memotong data sesuai halaman yang aktif
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return sortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [currentPage, sortedData]);
 
-  // Hitung total halaman yang ada
   const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
 
   const requestSort = (key: keyof OrganicWaste) => {
@@ -198,8 +195,8 @@ export default function OrganicWastePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Sampah Organik</h1>
-          <p className="text-muted-foreground">Kelola data sampah organik dari berbagai RT</p>
+          <h1 className="text-3xl font-bold tracking-tight">Data Sampah Organik</h1>
+          <p className="text-muted-foreground">Daftar semua data sampah organik yang telah dicatat</p>
         </div>
         <Button className="glow-effect" onClick={() => handleOpenDialog()}>
           <Plus className="mr-2 h-4 w-4" />
@@ -304,35 +301,37 @@ export default function OrganicWastePage() {
             </div>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[180px] text-center"><Button variant="ghost" onClick={() => requestSort("date")}>Tanggal <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("rt")}>RT <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead><Button variant="ghost" onClick={() => requestSort("nama")}>Nama <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("jumlah_kk")}>Jumlah KK <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("jumlah_timbunan_kg")}>Timbunan (kg) <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedData.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-center font-medium">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
-                      <TableCell className="text-center">{item.rt}</TableCell>
-                      <TableCell>{item.nama}</TableCell>
-                      <TableCell className="text-center">{item.jumlah_kk}</TableCell>
-                      <TableCell className="text-center">{item.jumlah_timbunan_kg.toFixed(1)} kg</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center space-x-2">
-                          <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="outline" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px] text-center"><Button variant="ghost" onClick={() => requestSort("date")}>Tanggal <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("rt")}>RT <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead><Button variant="ghost" onClick={() => requestSort("nama")}>Nama <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("jumlah_kk")}>Jumlah KK <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("jumlah_timbunan_kg")}>Timbunan (kg) <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center">Aksi</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedData.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-center font-medium">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
+                        <TableCell className="text-center">{item.rt}</TableCell>
+                        <TableCell>{item.nama}</TableCell>
+                        <TableCell className="text-center">{item.jumlah_kk}</TableCell>
+                        <TableCell className="text-center">{item.jumlah_timbunan_kg.toFixed(1)} kg</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center space-x-2">
+                            <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <div className="flex items-center justify-between pt-4">
                 <div className="text-sm text-muted-foreground">
                   Halaman {currentPage} dari {totalPages}
@@ -342,7 +341,7 @@ export default function OrganicWastePage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
+                    disabled={currentPage === 1 || totalPages === 0}
                   >
                     Sebelumnya
                   </Button>
@@ -350,7 +349,7 @@ export default function OrganicWastePage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage === totalPages || totalPages === 0}
                   >
                     Berikutnya
                   </Button>

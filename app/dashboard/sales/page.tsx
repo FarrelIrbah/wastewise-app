@@ -267,7 +267,8 @@ export default function SalesPage() {
     document.body.removeChild(link)
   }
 
-  const uniqueRTs = useMemo(() => Array.from(new Set(data.map((item) => item.rt))).sort(), [data])
+  // const uniqueRTs = useMemo(() => Array.from(new Set(data.map((item) => item.rt))).sort(), [data])
+  const uniqueRTs = useMemo(() => Array.from(new Set(data.map((item) => item.rt).filter(Boolean))).sort(), [data])
   const totalRevenue = useMemo(() => sortedData.reduce((sum, item) => sum + item.total_price, 0), [sortedData])
   const totalWeight = useMemo(() => sortedData.reduce((sum, item) => sum + item.weight_kg, 0), [sortedData])
 

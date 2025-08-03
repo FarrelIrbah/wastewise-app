@@ -26,6 +26,7 @@ interface OrganicWaste {
   jumlah_timbunan_kg: number
 }
 
+// Definisikan jumlah item per halaman
 const ITEMS_PER_PAGE = 10;
 
 export default function OrganicWastePage() {
@@ -46,6 +47,7 @@ export default function OrganicWastePage() {
     direction: "ascending" | "descending"
   } | null>({ key: "date", direction: "descending" })
   
+  // State untuk melacak halaman saat ini
   const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast()
@@ -74,7 +76,7 @@ export default function OrganicWastePage() {
   }, [])
 
   const filteredData = useMemo(() => {
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset ke halaman pertama setiap kali ada filter baru
     return data.filter(
       (item) =>
         item.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -98,11 +100,13 @@ export default function OrganicWastePage() {
     return sortableItems
   }, [filteredData, sortConfig])
 
+  // Logika untuk memotong data sesuai halaman yang aktif
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return sortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [currentPage, sortedData]);
 
+  // Hitung total halaman yang ada
   const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
 
   const requestSort = (key: keyof OrganicWaste) => {

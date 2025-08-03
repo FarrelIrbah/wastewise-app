@@ -15,7 +15,6 @@ import { createClient } from "@/lib/supabase/client"
 import { Plus, Search, Edit, Trash2, Loader2, Filter, Download, ArrowUpDown } from "lucide-react"
 import { format } from "date-fns"
 import { id } from "date-fns/locale"
-import { showDeleteConfirmation, showSuccessMessage, showErrorMessage, showLoadingMessage, closeLoadingMessage } from "@/lib/sweetalert"
 
 export const dynamic = "force-dynamic"
 
@@ -39,7 +38,6 @@ const itemTypeOptions = [
   { value: "Lalat BSF", label: "Lalat BSF" },
 ]
 
-// ✨ Fungsi kecil untuk menentukan warna badge berdasarkan jenis item
 const getItemTypeBadgeColor = (itemType: string) => {
   switch (itemType) {
     case "Maggot":
@@ -51,6 +49,8 @@ const getItemTypeBadgeColor = (itemType: string) => {
       return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
   }
 }
+
+const ITEMS_PER_PAGE = 10;
 
 export default function SalesPage() {
   const [data, setData] = useState<Sale[]>([])
@@ -75,6 +75,8 @@ export default function SalesPage() {
     key: "date",
     direction: "descending",
   })
+  
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast()
   const supabase = createClient()
@@ -109,6 +111,7 @@ export default function SalesPage() {
   }, [])
 
   const filteredData = useMemo(() => {
+    setCurrentPage(1);
     return data.filter(
       (item) =>
         (item.sale_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -134,6 +137,13 @@ export default function SalesPage() {
     }
     return sortableItems
   }, [filteredData, sortConfig])
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [currentPage, sortedData]);
+
+  const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
 
   const requestSort = (key: keyof Sale) => {
     let direction: "ascending" | "descending" = "ascending"
@@ -166,7 +176,6 @@ export default function SalesPage() {
         buyer: formData.buyer || null,
         notes: formData.notes || null,
       }
-
       if (editingItem) {
         const { error } = await supabase.from("sales").update(payload).eq("id", editingItem.id)
         if (error) throw error
@@ -217,22 +226,15 @@ export default function SalesPage() {
     setIsDialogOpen(true)
   }
 
-  const handleDelete = async (id: number, itemName: string) => {
-    const isConfirmed = await showDeleteConfirmation(`data penjualan ${itemName}`)
-    
-    if (isConfirmed) {
-      showLoadingMessage('Menghapus data...')
-      try {
-        const { error } = await supabase.from("sales").delete().eq("id", id)
-        if (error) throw error
-        
-        closeLoadingMessage()
-        showSuccessMessage('Berhasil!', 'Data penjualan berhasil dihapus.')
-        fetchData()
-      } catch (error) {
-        closeLoadingMessage()
-        showErrorMessage('Error!', 'Gagal menghapus data penjualan.')
-      }
+  const handleDelete = async (id: number) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data ini?")) return
+    try {
+      const { error } = await supabase.from("sales").delete().eq("id", id)
+      if (error) throw error
+      toast({ title: "Berhasil", description: "Data penjualan berhasil dihapus." })
+      fetchData()
+    } catch (error) {
+      toast({ title: "Error", description: "Gagal menghapus data.", variant: "destructive" })
     }
   }
 
@@ -255,7 +257,6 @@ export default function SalesPage() {
         ].join(",")
       ),
     ].join("\n")
-
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const link = document.createElement("a")
     const url = URL.createObjectURL(blob)
@@ -267,7 +268,6 @@ export default function SalesPage() {
     document.body.removeChild(link)
   }
 
-  // const uniqueRTs = useMemo(() => Array.from(new Set(data.map((item) => item.rt))).sort(), [data])
   const uniqueRTs = useMemo(() => Array.from(new Set(data.map((item) => item.rt).filter(Boolean))).sort(), [data])
   const totalRevenue = useMemo(() => sortedData.reduce((sum, item) => sum + item.total_price, 0), [sortedData])
   const totalWeight = useMemo(() => sortedData.reduce((sum, item) => sum + item.weight_kg, 0), [sortedData])
@@ -354,7 +354,7 @@ export default function SalesPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="price_per_kg">Harga per kg (Rp)</Label>
-                <Input id="price_per_kg" type="number" step="100" placeholder="2500" value={formData.price_per_kg} onChange={(e) => setFormData({ ...formData, price_per_kg: e.target.value })} required />
+                <Input id="price_per_kg" type="number" step="50" placeholder="2500" value={formData.price_per_kg} onChange={(e) => setFormData({ ...formData, price_per_kg: e.target.value })} required />
               </div>
             </div>
             <div className="space-y-2">
@@ -408,50 +408,73 @@ export default function SalesPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    {/* ✨ PERUBAHAN: Menambahkan `className` untuk header tabel ✨ */}
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("sale_id")}>Sale ID<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("date")}>Tanggal<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("rt")}>RT<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("item_type")}>Jenis Item<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("weight_kg")}>Berat (kg)<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("price_per_kg")}>Harga/kg</Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("total_price")}>Total Harga</Button></TableHead>
-                    <TableHead><Button variant="ghost" onClick={() => requestSort("buyer")}>Pembeli</Button></TableHead>
-                    <TableHead className="text-center">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedData.map((item) => (
-                    <TableRow key={item.id}>
-                      {/* ✨ PERUBAHAN: Menambahkan `className` untuk isi tabel ✨ */}
-                      <TableCell className="text-center font-mono font-semibold">{item.sale_id}</TableCell>
-                      <TableCell className="text-center">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
-                      <TableCell className="text-center">{item.rt}</TableCell>
-                      <TableCell className="text-center">
-                        <span className={`capitalize px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getItemTypeBadgeColor(item.item_type)}`}>
-                          {item.item_type}
-                          {item.item_detail ? ` (${item.item_detail})` : ""}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">{item.weight_kg.toFixed(1)} kg</TableCell>
-                      <TableCell className="text-center">Rp {item.price_per_kg.toLocaleString("id-ID")}</TableCell>
-                      <TableCell className="text-center font-semibold">Rp {item.total_price.toLocaleString("id-ID")}</TableCell>
-                      <TableCell>{item.buyer || "-"}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center space-x-2">
-                          <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="outline" size="icon" onClick={() => handleDelete(item.id, item.sale_id)}><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("sale_id")}>Sale ID<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("date")}>Tanggal<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("rt")}>RT<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("item_type")}>Jenis Item<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("weight_kg")}>Berat (kg)<ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("price_per_kg")}>Harga/kg</Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("total_price")}>Total Harga</Button></TableHead>
+                      <TableHead><Button variant="ghost" onClick={() => requestSort("buyer")}>Pembeli</Button></TableHead>
+                      <TableHead className="text-center">Aksi</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedData.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-center font-mono font-semibold">{item.sale_id}</TableCell>
+                        <TableCell className="text-center">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
+                        <TableCell className="text-center">{item.rt}</TableCell>
+                        <TableCell className="text-center">
+                          <span className={`capitalize px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getItemTypeBadgeColor(item.item_type)}`}>
+                            {item.item_type}
+                            {item.item_detail ? ` (${item.item_detail})` : ""}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">{item.weight_kg.toFixed(1)} kg</TableCell>
+                        <TableCell className="text-center">Rp {item.price_per_kg.toLocaleString("id-ID")}</TableCell>
+                        <TableCell className="text-center font-semibold">Rp {item.total_price.toLocaleString("id-ID")}</TableCell>
+                        <TableCell>{item.buyer || "-"}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center space-x-2">
+                            <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex items-center justify-between pt-4">
+                <div className="text-sm text-muted-foreground">
+                  Halaman {currentPage} dari {totalPages}
+                </div>
+                <div className="space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Sebelumnya
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Berikutnya
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

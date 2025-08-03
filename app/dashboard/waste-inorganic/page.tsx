@@ -30,6 +30,8 @@ interface InorganicWaste {
   notes: string | null
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function InorganicWastePage() {
   const [data, setData] = useState<InorganicWaste[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -52,6 +54,8 @@ export default function InorganicWastePage() {
     key: keyof InorganicWaste
     direction: "ascending" | "descending"
   } | null>({ key: "date", direction: "descending" })
+  
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { toast } = useToast()
   const supabase = createClient()
@@ -75,19 +79,14 @@ export default function InorganicWastePage() {
     fetchData()
   }, [])
 
-  // ✨ --- LOGIKA AUTOFILL DENGAN PENCEGAHAN INFINITE LOOP --- ✨
   useEffect(() => {
     const totalWeight = parseFloat(formData.weight_kg) || 0
     const recyclableWeight = parseFloat(formData.recyclable_kg) || 0
-
-    let calculatedResidu = "" // Default ke string kosong
-
+    let calculatedResidu = ""
     if (formData.weight_kg) {
       const residu = totalWeight > recyclableWeight ? totalWeight - recyclableWeight : 0
       calculatedResidu = residu.toFixed(1)
     }
-
-    // Hanya panggil setFormData JIKA nilai yang dihitung BERBEDA dengan nilai yang sudah ada
     if (calculatedResidu !== formData.non_recyclable_kg) {
       setFormData((prev) => ({
         ...prev,
@@ -97,6 +96,7 @@ export default function InorganicWastePage() {
   }, [formData.weight_kg, formData.recyclable_kg, formData.non_recyclable_kg])
   
   const filteredData = useMemo(() => {
+    setCurrentPage(1);
     return data.filter(
       (item) =>
         (item.household_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -122,6 +122,13 @@ export default function InorganicWastePage() {
     return sortableItems
   }, [filteredData, sortConfig])
 
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [currentPage, sortedData]);
+
+  const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
+
   const requestSort = (key: keyof InorganicWaste) => {
     let direction: "ascending" | "descending" = "ascending"
     if (sortConfig && sortConfig.key === key && sortConfig.direction === "ascending") {
@@ -136,11 +143,8 @@ export default function InorganicWastePage() {
       toast({ title: "Error", description: "Kolom bertanda (*) wajib diisi.", variant: "destructive" })
       return
     }
-
     const totalWeight = parseFloat(formData.weight_kg)
     const recyclableWeight = parseFloat(formData.recyclable_kg) || 0
-
-    // ✨ --- VALIDASI SEBELUM SUBMIT --- ✨
     if (recyclableWeight > totalWeight) {
       toast({
         title: "Input Tidak Valid",
@@ -149,7 +153,6 @@ export default function InorganicWastePage() {
       })
       return
     }
-    
     setIsLoading(true)
     try {
       const payload = {
@@ -162,7 +165,6 @@ export default function InorganicWastePage() {
         non_recyclable_kg: parseFloat(formData.non_recyclable_kg) || 0,
         notes: formData.notes || null,
       }
-
       if (editingItem) {
         const { error } = await supabase.from("waste_inorganic").update(payload).eq("id", editingItem.id)
         if (error) throw error
@@ -375,41 +377,66 @@ export default function InorganicWastePage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
           ) : (
-            <div className="w-full overflow-x-auto">
-              <Table className="min-w-[1200px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("date")}>Tanggal <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("rt")}>RT <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead><Button variant="ghost" onClick={() => requestSort("household_name")}>Nama Rumah Tangga <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("waste_type")}>Jenis <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("weight_kg")}>Berat Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("recyclable_kg")}>Didaur Ulang <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("non_recyclable_kg")}>Residu <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
-                    <TableHead className="text-center">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedData.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-center font-medium whitespace-nowrap">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
-                      <TableCell className="text-center">{item.rt}</TableCell>
-                      <TableCell>{item.household_name}</TableCell>
-                      <TableCell className="text-center"><span className="capitalize bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{item.waste_type}</span></TableCell>
-                      <TableCell className="text-center">{item.weight_kg.toFixed(1)} kg</TableCell>
-                      <TableCell className="text-center">{item.recyclable_kg ? `${item.recyclable_kg.toFixed(1)} kg` : "-"}</TableCell>
-                      <TableCell className="text-center">{item.non_recyclable_kg ? `${item.non_recyclable_kg.toFixed(1)} kg` : "-"}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center space-x-2">
-                          <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="outline" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </TableCell>
+            <>
+              <div className="w-full overflow-x-auto">
+                <Table className="min-w-[1200px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("date")}>Tanggal <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("rt")}>RT <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead><Button variant="ghost" onClick={() => requestSort("household_name")}>Nama Rumah Tangga <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("waste_type")}>Jenis <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("weight_kg")}>Berat Total <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("recyclable_kg")}>Didaur Ulang <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center"><Button variant="ghost" onClick={() => requestSort("non_recyclable_kg")}>Residu <ArrowUpDown className="ml-2 h-4 w-4" /></Button></TableHead>
+                      <TableHead className="text-center">Aksi</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedData.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-center font-medium whitespace-nowrap">{format(new Date(item.date), "dd MMM yyyy", { locale: id })}</TableCell>
+                        <TableCell className="text-center">{item.rt}</TableCell>
+                        <TableCell>{item.household_name}</TableCell>
+                        <TableCell className="text-center"><span className="capitalize bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{item.waste_type}</span></TableCell>
+                        <TableCell className="text-center">{item.weight_kg.toFixed(1)} kg</TableCell>
+                        <TableCell className="text-center">{item.recyclable_kg ? `${item.recyclable_kg.toFixed(1)} kg` : "-"}</TableCell>
+                        <TableCell className="text-center">{item.non_recyclable_kg ? `${item.non_recyclable_kg.toFixed(1)} kg` : "-"}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center space-x-2">
+                            <Button variant="outline" size="icon" onClick={() => handleOpenDialog(item)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => handleDelete(item.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex items-center justify-between pt-4">
+                <div className="text-sm text-muted-foreground">
+                  Halaman {currentPage} dari {totalPages}
+                </div>
+                <div className="space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Sebelumnya
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Berikutnya
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
